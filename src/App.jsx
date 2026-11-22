@@ -27,14 +27,15 @@ function App() {
   const [offers, setOffers] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const refreshProducts = async () => {
-    try { const { data } = await api.get('/products'); setProducts(data) } catch { setProducts([]) } finally { setLoading(false) }
+    try { const { data } = await api.get('/products'); setProducts(Array.isArray(data) ? data : []) } catch { setProducts([]) } finally { setLoading(false) }
   }
-  const refreshOffers = async () => { try { const { data } = await api.get('/offers'); setOffers(data) } catch { setOffers([]) } }
-  const refreshAnnouncements = async () => { try { const { data } = await api.get('/announcements'); setAnnouncements(data) } catch { setAnnouncements([]) } }
+  const refreshOffers = async () => { try { const { data } = await api.get('/offers'); setOffers(Array.isArray(data) ? data : []) } catch { setOffers([]) } }
+  const refreshAnnouncements = async () => { try { const { data } = await api.get('/announcements'); setAnnouncements(Array.isArray(data) ? data : []) } catch { setAnnouncements([]) } }
   const refreshCustomerCommerce = async () => {
     try {
       const [cartResponse, wishlistResponse] = await Promise.all([api.get('/customers/cart'), api.get('/customers/wishlist')])
-      setCart(cartResponse.data.items); setWishlist(wishlistResponse.data.productIds)
+      setCart(Array.isArray(cartResponse.data?.items) ? cartResponse.data.items : [])
+      setWishlist(Array.isArray(wishlistResponse.data?.productIds) ? wishlistResponse.data.productIds : [])
     } catch { setCart([]); setWishlist([]) }
   }
   // The storefront is API-driven. A short refresh also picks up an admin
@@ -156,7 +157,7 @@ function ProductCard({ product }) {
 
 function Shop() {
   const { products, loading } = useStore(); const { category } = useParams(); const [params, setParams] = useState(() => new URLSearchParams(window.location.search)); const query = params.get('q') || ''; const selectedCategory = category || params.get('category') || 'all'; const sort = params.get('sort') || 'newest'; const [filterOpen, setFilterOpen] = useState(false)
-  let shown = products.filter(product => (selectedCategory === 'all' || product.category === selectedCategory) && (!query || `${product.name} ${product.description} ${product.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())))
+  let shown = products.filter(product => (selectedCategory === 'all' || product.category === selectedCategory) && (!query || `${product.name} ${product.description} ${(product.tags || []).join(' ')}`.toLowerCase().includes(query.toLowerCase())))
   if (sort === 'price-asc') shown = [...shown].sort((a, b) => a.sellingPrice - b.sellingPrice); if (sort === 'price-desc') shown = [...shown].sort((a, b) => b.sellingPrice - a.sellingPrice)
   const update = (key, value) => { const next = new URLSearchParams(params); value === 'all' || value === '' ? next.delete(key) : next.set(key, value); setParams(next); window.history.replaceState({}, '', `${category ? `/collections/${category}` : '/shop'}?${next}`) }
   const currentCategory = categories.find(item => item.slug === selectedCategory)
@@ -266,7 +267,7 @@ function AdminSignup() { const navigate = useNavigate(); const [form, setForm] =
 
 function AdminApp() {
   const navigate = useNavigate(); const [overview, setOverview] = useState(null); const [products, setProducts] = useState([]); const [offers, setOffers] = useState([]); const [announcements, setAnnouncements] = useState([]); const [view, setView] = useState('overview'); const [editing, setEditing] = useState(null); const [message, setMessage] = useState('')
-  const getProducts = async () => { const { data } = await api.get('/admin/products', authConfig()); setProducts(data) }; const getOverview = async () => { const { data } = await api.get('/admin/overview', authConfig()); setOverview(data) }; const getOffers = async () => { const { data } = await api.get('/admin/offers', authConfig()); setOffers(data) }; const getAnnouncements = async () => { const { data } = await api.get('/admin/announcements', authConfig()); setAnnouncements(data) }
+  const getProducts = async () => { const { data } = await api.get('/admin/products', authConfig()); setProducts(Array.isArray(data) ? data : []) }; const getOverview = async () => { const { data } = await api.get('/admin/overview', authConfig()); setOverview(data) }; const getOffers = async () => { const { data } = await api.get('/admin/offers', authConfig()); setOffers(Array.isArray(data) ? data : []) }; const getAnnouncements = async () => { const { data } = await api.get('/admin/announcements', authConfig()); setAnnouncements(Array.isArray(data) ? data : []) }
   useEffect(() => { Promise.all([getOverview(), getProducts(), getOffers(), getAnnouncements()]).catch(error => { if ([401, 403].includes(error.response?.status)) navigate('/admin/login', { replace: true }) }) }, [])
   const openForm = product => { setEditing(product || null); setView('editor') }; const done = async note => { setMessage(note); setView('products'); setEditing(null); await Promise.all([getProducts(), getOverview()]) }; const logout = async () => { try { await api.post('/auth/logout') } finally { navigate('/admin/login') } }; const headings = { overview: 'Good morning.', products: 'Products', editor: editing ? 'Edit product' : 'Add a product', offers: 'Discount offers', announcements: 'Announcement bar' }
   return <main className="admin-shell"><aside className="admin-sidebar"><Link className="logo" to="/"><BrandLogo /><small>ADMIN</small></Link><nav><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}><Sparkles /> Overview</button><button className={view === 'products' || view === 'editor' ? 'active' : ''} onClick={() => { setView('products'); setEditing(null) }}><Package /> Products</button><button className={view === 'offers' ? 'active' : ''} onClick={() => setView('offers')}><BadgePercent /> Offers</button><button className={view === 'announcements' ? 'active' : ''} onClick={() => setView('announcements')}><Megaphone /> Announcements</button><button disabled><CircleUserRound /> Requests <span>soon</span></button></nav><div><Link to="/" className="view-store">View storefront <ArrowRight /></Link><button className="logout" onClick={logout}><LogOut /> Sign out</button></div></aside><section className="admin-content"><header><div><p className="eyebrow">DA_DINO / ADMIN</p><h1>{headings[view]}</h1></div>{view === 'products' && <button className="button dark" onClick={() => openForm(null)}><Plus /> Add product</button>}</header>{message && <div className="toast"><Check /> {message}<button onClick={() => setMessage('')}><X /></button></div>}{view === 'overview' && <AdminOverview overview={overview} onProducts={() => setView('products')} />}{view === 'products' && <AdminProducts products={products} refresh={async () => { await Promise.all([getProducts(), getOverview()]) }} onEdit={openForm} onNotice={setMessage} />}{view === 'editor' && <ProductEditor product={editing} onCancel={() => setView('products')} onSaved={done} />}{view === 'offers' && <AdminOffers offers={offers} refresh={getOffers} onNotice={setMessage} />}{view === 'announcements' && <AdminAnnouncements announcements={announcements} refresh={getAnnouncements} onNotice={setMessage} />}</section></main>
